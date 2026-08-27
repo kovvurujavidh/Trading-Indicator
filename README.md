@@ -2,7 +2,7 @@
 
 <img src="index-pro-banner.svg" alt="Animated Index Pro trading banner" width="100%" />
 
-# Index Pro v3 Stable
+# IndexPro v1
 
 ### A rules-based intraday indicator for NIFTY, BANKNIFTY and SENSEX
 
@@ -62,15 +62,22 @@ The bearish flow mirrors the bullish flow: bearish 5M context, a break below the
 ## Chart language
 
 - **POC — Point of Control:** price with the most profile volume; a balance reference, not an automatic entry.
-- **VAH — Value Area High:** upper edge of the main value area.
-- **VAL — Value Area Low:** lower edge of the main value area.
+- **PDH / PDL:** previous-day body high and body low used as the primary breakout levels.
 - **FVG — Fair Value Gap:** inefficient fast-move area; a possible location, never a signal by itself.
 - **ADX — Average Directional Index:** trend-strength measure; it does not define direction alone.
 - **B / S circles:** high-volume candles with strong bullish or bearish bodies.
 
 ## Current signal behavior
 
-The published VAH/VAL-free version uses POC plus previous-day body high and low (PDH/PDL). Confirmed BUY and SELL markers appear only after a break, a later retest, and a confirmed candle that passes trend, body-size, and optional volume filters. The info panel shows BUY, SELL, or WAIT; it never uses OFF.
+The VAH/VAL-free version uses POC plus previous-day body high and low (PDH/PDL). Confirmed BUY and SELL markers appear after a confirmed break followed by a sustain candle that passes trend, body-size, and optional volume filters. The info panel shows BULLISH or BEARISH trend and BUY, SELL, or WAIT signal status.
+
+## IndexPro v1 defaults
+
+- POC, trend, signals, and FVGs are enabled by default.
+- Only pivot length, pivot visibility, and manual Resistance/Support are editable inputs.
+- Manual Resistance and Support use draggable chart price inputs.
+- FVGs are drawn only on confirmed three-candle gaps.
+- BUY and SELL boxes are compact, color-coded, and placed to the right of the signal candle.
 
 ## Recommended setup
 
@@ -96,12 +103,11 @@ The indicator includes TradingView alerts for:
 
 - Confirmed BUY and SELL signals
 - Aggressive buyer and seller candles
-- Confirmed BUY C and BUY P option-direction signals
 
 ## Installation
 
 1. Open TradingView → **Pine Editor**.
-2. Open `IndexPro_v3_No_VAH_VAL.pine`.
+2. Open `IndexPro_v1.pine`.
 3. Copy the complete script beginning with `//@version=6`.
 4. Paste it into Pine Editor and click **Add to chart**.
 5. Create alerts only after checking the selected symbol, timeframe and session.
