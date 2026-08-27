@@ -14,7 +14,7 @@
 
 > **Direction → Location → Retest → Confirmation → Entry → Protect → Target**
 
-Index Pro v3 Stable is a single-overlay TradingView indicator designed to turn a disciplined scalping process into visible, repeatable chart rules. It combines higher-timeframe bias, volume-profile location, price-action confirmation, and defined trade levels without treating every candle as a signal.
+Index Pro v3 Stable is a single-overlay TradingView indicator designed to turn a disciplined scalping process into visible, repeatable chart rules. It combines higher-timeframe bias, POC location, previous-day body levels, price-action confirmation, and defined trade levels without treating every candle as a signal.
 
 <div align="center">
 
@@ -27,7 +27,7 @@ Index Pro v3 Stable is a single-overlay TradingView indicator designed to turn a
 | Module | What it shows | How it is used |
 |---|---|---|
 | **5M bias** | EMA 9/21, +DI, -DI and manual ADX | Defines bullish, bearish or ranging context |
-| **Session profile** | POC, VAH and VAL | Maps the main auction and reaction area |
+| **Session profile** | POC | Maps the main auction reference price |
 | **Price action** | FVGs, pivots and key strikes | Identifies possible locations, never automatic entries |
 | **Volume** | Current volume vs 20-bar average | Highlights unusually active candles |
 | **State machine** | WAIT → ZONE → REACTED → RETEST → SIGNAL | Prevents first-touch and chase entries |
@@ -50,14 +50,14 @@ flowchart LR
 ### Bullish setup
 
 1. 5M EMA/ADX context is bullish.
-2. Price reaches VAL, an FVG, POC, or another marked reaction zone.
-3. Price retests the area instead of being bought on first touch.
-4. A confirmed 1M bullish candle closes above the previous high with sufficient body and volume.
-5. The indicator displays entry, invalidation stop, and risk/reward target.
+2. Price breaks and closes above the previous-day body high (PDH) during the Indian session.
+3. Price retests PDH instead of being bought on the first breakout candle.
+4. A confirmed bullish candle closes above the previous high with sufficient body and optional volume confirmation.
+5. The indicator displays BUY, entry, stop-loss, and risk/reward target.
 
 ### Bearish setup
 
-The bearish flow mirrors the bullish flow: bearish 5M context, VAH/resistance location, retest, confirmed sellers, then a defined stop and target.
+The bearish flow mirrors the bullish flow: bearish 5M context, a break below the previous-day body low (PDL), retest, confirmed sellers, then a defined stop and target.
 
 ## Chart language
 
@@ -67,6 +67,10 @@ The bearish flow mirrors the bullish flow: bearish 5M context, VAH/resistance lo
 - **FVG — Fair Value Gap:** inefficient fast-move area; a possible location, never a signal by itself.
 - **ADX — Average Directional Index:** trend-strength measure; it does not define direction alone.
 - **B / S circles:** high-volume candles with strong bullish or bearish bodies.
+
+## Current signal behavior
+
+The published VAH/VAL-free version uses POC plus previous-day body high and low (PDH/PDL). Confirmed BUY and SELL markers appear only after a break, a later retest, and a confirmed candle that passes trend, body-size, and optional volume filters. The info panel shows BUY, SELL, or WAIT; it never uses OFF.
 
 ## Recommended setup
 
@@ -92,11 +96,12 @@ The indicator includes TradingView alerts for:
 
 - Confirmed BUY and SELL signals
 - Aggressive buyer and seller candles
+- Confirmed BUY C and BUY P option-direction signals
 
 ## Installation
 
 1. Open TradingView → **Pine Editor**.
-2. Open `toolv3_stable.pine`.
+2. Open `IndexPro_v3_No_VAH_VAL.pine`.
 3. Copy the complete script beginning with `//@version=6`.
 4. Paste it into Pine Editor and click **Add to chart**.
 5. Create alerts only after checking the selected symbol, timeframe and session.

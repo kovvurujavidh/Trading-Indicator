@@ -1,0 +1,528 @@
+//@version=6
+indicator("Index Pro v3 Stable", shorttitle="IdxStable", overlay=true, max_lines_count=100, max_labels_count=100, max_boxes_count=50)
+
+// ============================================================================
+// INPUTS
+// ============================================================================
+
+grpSR = "â•â• Support & Resistance â•â•"
+srLen = input.int(10, "Pivot Length", minval=3, maxval=50, group=grpSR)
+showSR = input.bool(false, "Show Pivot R / S Levels", group=grpSR, tooltip="Disabled: primary R/S are Previous Day High/Low.")
+useManualRS = input.bool(false, "Use Manual R / S", group=grpSR, tooltip="Enter fixed price levels below. Manual levels replace automatic pivot R/S lines.")
+manualResistance = input.float(0.0, "Manual Resistance (R)", minval=0.0, group=grpSR, active=useManualRS, tooltip="Enter the exact resistance price. Use 0 to disable.")
+manualSupport = input.float(0.0, "Manual Support (S)", minval=0.0, group=grpSR, active=useManualRS, tooltip="Enter the exact support price. Use 0 to disable.")
+
+grpVP = "â•â• Volume Profile â•â•"
+profBins = input.int(42, "Profile Bins", minval=10, maxval=100, group=grpVP)
+showVP = input.bool(true, "Show POC", group=grpVP)
+
+grpFVG = "â•â• Fair Value Gap â•â•"
+showFVG = input.bool(true, "Show FVGs", group=grpFVG)
+maxFVG = input.int(3, "Max Active FVGs", minval=1, maxval=10, group=grpFVG)
+
+grpT = "â•â• Trend â•â•"
+emaFast = input.int(9, "Fast EMA", group=grpT)
+emaSlow = input.int(21, "Slow EMA", group=grpT)
+biasTf = input.timeframe("5", "Bias Timeframe", group=grpT, tooltip="Higher timeframe used for directional bias. Keep this at 5 minutes for the playbook workflow.")
+adxLen = input.int(14, "ADX Length", group=grpT)
+adxThresh = input.int(20, "ADX Threshold", group=grpT)
+showTrend = input.bool(true, "Show Trend", group=grpT)
+
+grpV = "â•â• Volume â•â•"
+volLen = input.int(20, "Volume MA Length", group=grpV)
+volMult = input.float(1.5, "High Volume Mult", minval=1.0, maxval=5.0, step=0.1, group=grpV)
+
+grpK = "â•â• Key Levels â•â•"
+strikeStep = input.int(50, "Strike Interval", minval=10, maxval=500, step=10, group=grpK, tooltip="50=NIFTY, 100=BANKNIFTY/SENSEX")
+showKeys = input.bool(true, "Show Key Levels", group=grpK)
+
+grpS = "â•â• Signals â•â•"
+atrLen = input.int(14, "ATR Period", group=grpS)
+atrBuf = input.float(0.5, "ATR Buffer SL", minval=0.1, maxval=2.0, step=0.1, group=grpS)
+rrRatio = input.float(2.0, "Risk:Reward", minval=1.0, maxval=5.0, step=0.5, group=grpS)
+bodyPct = input.float(55.0, "Min Body %", minval=30.0, maxval=90.0, step=5.0, group=grpS)
+useVol = input.bool(true, "Volume Filter", group=grpS)
+maxRetest = input.int(30, "Max Retest Bars", minval=10, maxval=100, group=grpS)
+showSignals = input.bool(true, "Show Trade Signals", group=grpS)
+showOptionSignals = input.bool(true, "Show BUY C / BUY P", group=grpS, tooltip="BUY C = confirmed bullish break above R. BUY P = confirmed bearish break below S.")
+showPotentialSignals = input.bool(true, "Show Potential C / P", group=grpS, tooltip="Small dots show price approaching R or S. They are watch signals, not entries.")
+
+grpD = "â•â• Display â•â•"
+showPanel = input.bool(true, "Show Info Panel", group=grpD)
+
+type FvgZone
+    float top
+    float bottom
+    int direction
+    int bornBar
+    box zoneBox = na
+
+// ============================================================================
+// ATR
+// ============================================================================
+
+float atr = ta.atr(atrLen)
+float volSMA = ta.sma(volume, volLen)
+
+// ============================================================================
+// TREND (manual ADX â€” no ta.adx in v6)
+// ============================================================================
+
+f_trendMetrics() =>
+    float htfEmaF = ta.ema(close, emaFast)
+    float htfEmaS = ta.ema(close, emaSlow)
+    float htfUpMove = high - high[1]
+    float htfDownMove = low[1] - low
+    float htfPlusDM = htfUpMove > htfDownMove and htfUpMove > 0 ? htfUpMove : 0
+    float htfMinusDM = htfDownMove > htfUpMove and htfDownMove > 0 ? htfDownMove : 0
+    float htfAtr = ta.atr(adxLen)
+    float htfPlusDI = htfAtr != 0 ? (ta.rma(htfPlusDM, adxLen) / htfAtr) * 100 : 0
+    float htfMinusDI = htfAtr != 0 ? (ta.rma(htfMinusDM, adxLen) / htfAtr) * 100 : 0
+    float htfDiTotal = htfPlusDI + htfMinusDI
+    float htfDx = htfDiTotal != 0 ? (math.abs(htfPlusDI - htfMinusDI) / htfDiTotal) * 100 : 0
+    [htfEmaF, htfEmaS, htfPlusDI, htfMinusDI, ta.rma(htfDx, adxLen)]
+
+[emaF, emaS, plusDI, minusDI, adxVal] = request.security(syminfo.tickerid, biasTf, f_trendMetrics(), lookahead=barmerge.lookahead_off)
+
+int trend = emaF > emaS and plusDI > minusDI and adxVal > adxThresh ? 1 : emaF < emaS and minusDI > plusDI and adxVal > adxThresh ? -1 : 0
+color trendCol = trend == 1 ? color.new(color.green, 30) : trend == -1 ? color.new(color.red, 30) : color.gray
+string trendStr = trend == 1 ? "BULLISH" : trend == -1 ? "BEARISH" : "RANGING"
+
+// ============================================================================
+// VOLUME
+// ============================================================================
+
+bool highVol = volume > volSMA * volMult
+bool buyPressure = close > open and highVol
+bool sellPressure = close < open and highVol
+
+// ============================================================================
+// SESSION (Indian markets)
+// ============================================================================
+
+bool inSess = not na(time(timeframe.period, "0915-1530", "Asia/Kolkata"))
+bool sessStart = inSess and not inSess[1]
+
+// ============================================================================
+// VOLUME PROFILE â€” POC
+// ============================================================================
+
+var float[] vpBins = array.new_float(0)
+var float sessHi = na
+var float sessLo = na
+var float poc = na
+
+if sessStart
+    array.clear(vpBins)
+    int _i = 0
+    while _i < profBins
+        array.push(vpBins, 0.0)
+        _i += 1
+    sessHi := high
+    sessLo := low
+
+if inSess
+    sessHi := math.max(nz(sessHi, high), high)
+    sessLo := math.min(nz(sessLo, low), low)
+    float rng = sessHi - sessLo
+    float bsz = rng / profBins
+    if bsz > 0 and array.size(vpBins) == profBins
+        int bi = math.round((hlc3 - sessLo) / bsz)
+        bi := math.max(0, math.min(profBins - 1, bi))
+        array.set(vpBins, bi, array.get(vpBins, bi) + volume)
+        float mx = 0.0
+        int pi = 0
+        int _j = 0
+        while _j < profBins
+            if array.get(vpBins, _j) > mx
+                mx := array.get(vpBins, _j)
+                pi := _j
+            _j += 1
+        poc := sessLo + (pi + 0.5) * bsz
+// ============================================================================
+// PREVIOUS DAY HIGH / LOW
+// ============================================================================
+
+// Body-only previous-day levels: ignore the day's upper/lower wicks.
+float pdh = request.security(syminfo.tickerid, "D", math.max(open, close)[1], barmerge.gaps_off, barmerge.lookahead_off)
+float pdl = request.security(syminfo.tickerid, "D", math.min(open, close)[1], barmerge.gaps_off, barmerge.lookahead_off)
+
+// ============================================================================
+// FAIR VALUE GAP
+// ============================================================================
+
+var array<FvgZone> fvgZones = array.new<FvgZone>()
+
+if barstate.isconfirmed
+    int idx = 0
+    int sz = array.size(fvgZones)
+    while idx < sz
+        bool rem = false
+        FvgZone zone = array.get(fvgZones, idx)
+        if zone.direction == 1 and close < zone.bottom
+            rem := true
+        if zone.direction == -1 and close > zone.top
+            rem := true
+        if bar_index - zone.bornBar > 100
+            rem := true
+        if rem
+            if not na(zone.zoneBox)
+                box.delete(zone.zoneBox)
+            array.remove(fvgZones, idx)
+            sz -= 1
+        else
+            if not na(zone.zoneBox)
+                box.set_right(zone.zoneBox, time + int(timeframe.in_seconds() * 1000 * 5))
+            idx += 1
+
+if barstate.isconfirmed and showFVG
+    int fvgRight = time + int(timeframe.in_seconds() * 1000 * 5)
+    if low > high[2] and array.size(fvgZones) < maxFVG
+        box bullBox = box.new(time[1], low, fvgRight, high[2], xloc=xloc.bar_time, bgcolor=color.new(color.green, 88), border_color=color.new(color.green, 70), border_width=1, text="FVG", text_color=color.green, text_size=size.small, text_halign=text.align_center, text_valign=text.align_center)
+        array.push(fvgZones, FvgZone.new(low, high[2], 1, bar_index, bullBox))
+    if high < low[2] and array.size(fvgZones) < maxFVG
+        box bearBox = box.new(time[1], low[2], fvgRight, high, xloc=xloc.bar_time, bgcolor=color.new(color.red, 88), border_color=color.new(color.red, 70), border_width=1, text="FVG", text_color=color.red, text_size=size.small, text_halign=text.align_center, text_valign=text.align_center)
+        array.push(fvgZones, FvgZone.new(low[2], high, -1, bar_index, bearBox))
+
+// ============================================================================
+// S/R â€” Named R1-R3, S1-S3
+// ============================================================================
+
+float pivotH = ta.pivothigh(high, srLen, srLen)
+float pivotL = ta.pivotlow(low, srLen, srLen)
+
+var array<float> srPrices = array.new_float(0)
+var array<string> srNames = array.new_string(0)
+var array<int> srHits = array.new_int(0)
+
+if not na(pivotH)
+    float lvl = pivotH
+    bool found = false
+    int _i = 0
+    while _i < array.size(srPrices)
+        if math.abs(array.get(srPrices, _i) - lvl) < atr * 0.2
+            array.set(srHits, _i, array.get(srHits, _i) + 1)
+            found := true
+            break
+        _i += 1
+    if not found
+        array.push(srPrices, lvl)
+        array.push(srNames, "")
+        array.push(srHits, 1)
+
+if not na(pivotL)
+    float lvl = pivotL
+    bool found = false
+    int _i = 0
+    while _i < array.size(srPrices)
+        if math.abs(array.get(srPrices, _i) - lvl) < atr * 0.2
+            array.set(srHits, _i, array.get(srHits, _i) + 1)
+            found := true
+            break
+        _i += 1
+    if not found
+        array.push(srPrices, lvl)
+        array.push(srNames, "")
+        array.push(srHits, 1)
+
+while array.size(srPrices) > 20
+    array.remove(srPrices, 0)
+    array.remove(srNames, 0)
+    array.remove(srHits, 0)
+
+// Draw S/R â€” above = R, below = S
+var array<line> srLineArr = array.new_line(0)
+var array<label> srLblArr = array.new_label(0)
+
+int _cl = 0
+while _cl < array.size(srLineArr)
+    line.delete(array.get(srLineArr, _cl))
+    _cl += 1
+array.clear(srLineArr)
+
+int _cl2 = 0
+while _cl2 < array.size(srLblArr)
+    label.delete(array.get(srLblArr, _cl2))
+    _cl2 += 1
+array.clear(srLblArr)
+
+if showSR and not useManualRS and array.size(srPrices) > 0
+    int rNum = 0
+    int sNum = 0
+    // Draw from highest to lowest
+    int _s = 0
+    while _s < array.size(srPrices)
+        float p = array.get(srPrices, _s)
+        int h = array.get(srHits, _s)
+        if p > close and rNum < 3
+            rNum += 1
+            string name = "R" + str.tostring(rNum) + " / Pivot Resistance"
+            color rCol = h >= 3 ? color.new(color.red, 30) : color.new(color.red, 60)
+            line ln = line.new(bar_index - 60, p, bar_index + 10, p, color=rCol, width=h >= 3 ? 3 : 2, style=line.style_solid)
+            array.push(srLineArr, ln)
+            label lbl = label.new(bar_index + 11, p, " " + name + " " + str.tostring(p, format.mintick), color=color.new(color.black, 100), textcolor=rCol, style=label.style_label_left, size=size.normal)
+            array.push(srLblArr, lbl)
+        else if p <= close and sNum < 3
+            sNum += 1
+            string name = "S" + str.tostring(sNum) + " / Pivot Support"
+            color sCol = h >= 3 ? color.new(color.green, 30) : color.new(color.green, 60)
+            line ln = line.new(bar_index - 60, p, bar_index + 10, p, color=sCol, width=h >= 3 ? 3 : 2, style=line.style_solid)
+            array.push(srLineArr, ln)
+            label lbl = label.new(bar_index + 11, p, " " + name + " " + str.tostring(p, format.mintick), color=color.new(color.black, 100), textcolor=sCol, style=label.style_label_left, size=size.normal)
+            array.push(srLblArr, lbl)
+        _s += 1
+
+// ============================================================================
+// KEY STRIKE LEVELS
+// ============================================================================
+
+var array<line> keyLineArr = array.new_line(0)
+var array<label> keyLblArr = array.new_label(0)
+
+int _kl = 0
+while _kl < array.size(keyLineArr)
+    line.delete(array.get(keyLineArr, _kl))
+    _kl += 1
+array.clear(keyLineArr)
+
+int _kl2 = 0
+while _kl2 < array.size(keyLblArr)
+    label.delete(array.get(keyLblArr, _kl2))
+    _kl2 += 1
+array.clear(keyLblArr)
+
+if showKeys
+    float base = math.floor(close / strikeStep) * strikeStep
+    float[] kLevels = array.from(base, base + strikeStep, base - strikeStep, base + strikeStep * 2, base - strikeStep * 2)
+    int _k = 0
+    while _k < array.size(kLevels)
+        float kLvl = array.get(kLevels, _k)
+        line kLn = line.new(bar_index - 60, kLvl, bar_index + 10, kLvl, color=color.new(color.blue, 70), width=2, style=line.style_dotted)
+        array.push(keyLineArr, kLn)
+        label kLbl = label.new(bar_index + 11, kLvl, " KEY STRIKE " + str.tostring(kLvl, format.mintick), color=color.new(color.black, 100), textcolor=color.new(color.blue, 40), style=label.style_label_left, size=size.normal)
+        array.push(keyLblArr, kLbl)
+        _k += 1
+
+
+
+// ============================================================================
+// VISUAL â€” POC
+// ============================================================================
+
+var line linePOC = na
+var label lblPOC = na
+
+if not na(linePOC)
+    line.delete(linePOC)
+if not na(lblPOC)
+    label.delete(lblPOC)
+
+// ============================================================================
+// TRADE SIGNALS — Previous-Day R/S Break, Retest + Confirmation
+// ============================================================================
+
+var int longState = 0
+var int shortState = 0
+var float longZone = na
+var float shortZone = na
+var int longBar = 0
+var int shortBar = 0
+
+bool signalBUY = false
+bool signalSELL = false
+float sigEntry = na
+float sigSL = na
+float sigTP = na
+
+if barstate.isconfirmed and inSess and not na(atr) and atr > 0 and not na(pdh) and not na(pdl)
+    if longState == 0 and trend == 1 and close > pdh and close[1] <= pdh
+        longState := 1
+        longZone := pdh
+        longBar := bar_index
+    if longState == 1 and bar_index > longBar
+        if close < longZone - atr * 0.5 or bar_index - longBar > maxRetest
+            longState := 0
+        else if close <= longZone + atr * 0.3 and close >= longZone - atr * 0.3
+            longState := 2
+    if longState == 2 and bar_index > longBar
+        bool bullCandle = close > open
+        float body = close - open
+        float rng = high - low
+        bool bodyOK = rng > 0 and (body / rng) * 100 >= bodyPct
+        bool breakPrev = close > high[1]
+        bool volOK = useVol ? volume >= volSMA : true
+        if bullCandle and bodyOK and breakPrev and volOK and trend == 1 and close > longZone
+            signalBUY := true
+            sigEntry := close
+            sigSL := longZone - atrBuf * atr
+            sigTP := close + (close - sigSL) * rrRatio
+            longState := 0
+        else if close < longZone - atr * 0.5 or bar_index - longBar > maxRetest
+            longState := 0
+
+    if shortState == 0 and trend == -1 and close < pdl and close[1] >= pdl
+        shortState := 1
+        shortZone := pdl
+        shortBar := bar_index
+    if shortState == 1 and bar_index > shortBar
+        if close > shortZone + atr * 0.5 or bar_index - shortBar > maxRetest
+            shortState := 0
+        else if close >= shortZone - atr * 0.3 and close <= shortZone + atr * 0.3
+            shortState := 2
+    if shortState == 2 and bar_index > shortBar
+        bool bearCandle = close < open
+        float sbody = open - close
+        float srng = high - low
+        bool bodyOK = srng > 0 and (sbody / srng) * 100 >= bodyPct
+        bool breakPrev = close < low[1]
+        bool volOK = useVol ? volume >= volSMA : true
+        if bearCandle and bodyOK and breakPrev and volOK and trend == -1 and close < shortZone
+            signalSELL := true
+            sigEntry := close
+            sigSL := shortZone + atrBuf * atr
+            sigTP := close - (sigSL - close) * rrRatio
+            shortState := 0
+        else if close > shortZone + atr * 0.5 or bar_index - shortBar > maxRetest
+            shortState := 0
+
+if showVP and not na(poc)
+    linePOC := line.new(bar_index - 60, poc, bar_index + 10, poc, color=color.new(color.yellow, 20), width=3, style=line.style_solid)
+    lblPOC := label.new(bar_index + 11, poc, " POC / Main Volume Price " + str.tostring(poc, format.mintick), color=color.new(color.yellow, 80), textcolor=color.yellow, style=label.style_label_left, size=size.normal)
+
+// ============================================================================
+// VISUAL â€” LIGHTWEIGHT TREND
+// ============================================================================
+
+plot(showTrend ? emaF : na, "5M Trend EMA", color=trendCol, linewidth=2)
+var line rLine = na
+var line sLine = na
+if barstate.islast and not na(pdh) and not na(pdl)
+    int rsLineTime = time + int(nz(timeframe.in_seconds(), 60) * 1000)
+    if na(rLine)
+        rLine := line.new(time, pdh, rsLineTime, pdh, xloc=xloc.bar_time, extend=extend.right, color=color.green, width=2)
+        sLine := line.new(time, pdl, rsLineTime, pdl, xloc=xloc.bar_time, extend=extend.right, color=color.red, width=2)
+    else
+        line.set_xy1(rLine, time, pdh)
+        line.set_xy2(rLine, rsLineTime, pdh)
+        line.set_xy1(sLine, time, pdl)
+        line.set_xy2(sLine, rsLineTime, pdl)
+plot(useManualRS and manualResistance > 0 ? manualResistance : na, "Manual R / Resistance", color=color.new(color.red, 0), linewidth=2, style=plot.style_linebr)
+plot(useManualRS and manualSupport > 0 ? manualSupport : na, "Manual S / Support", color=color.new(color.lime, 0), linewidth=2, style=plot.style_linebr)
+
+// ============================================================================
+// VISUAL â€” BUYER / SELLER CIRCLES
+// ============================================================================
+
+float candleRange = high - low
+bool strongBull = candleRange > 0 and close > open and ((close - open) / candleRange * 100 >= bodyPct) and highVol and trend == 1
+bool strongBear = candleRange > 0 and close < open and ((open - close) / candleRange * 100 >= bodyPct) and highVol and trend == -1
+bool bullishBreakConfirmed = barstate.isconfirmed and inSess and not na(pdh) and close > pdh and close[1] <= pdh and close > open and candleRange > 0 and ((close - open) / candleRange * 100 >= bodyPct)
+bool bearishBreakConfirmed = barstate.isconfirmed and inSess and not na(pdl) and close < pdl and close[1] >= pdl and close < open and candleRange > 0 and ((open - close) / candleRange * 100 >= bodyPct)
+bool buyCall = bullishBreakConfirmed and trend == 1
+bool buyPut = bearishBreakConfirmed and trend == -1
+bool potentialCall = showPotentialSignals and inSess and trend == 1 and not na(pdh) and close < pdh and close >= pdh - atr * 0.6
+bool potentialPut = showPotentialSignals and inSess and trend == -1 and not na(pdl) and close > pdl and close <= pdl + atr * 0.6
+
+if barstate.isconfirmed
+    if strongBull
+        label.new(bar_index, low, "B", color=color.new(color.black, 100), textcolor=color.new(color.green, 10), style=label.style_label_up, size=size.small)
+    if strongBear
+        label.new(bar_index, high, "S", color=color.new(color.black, 100), textcolor=color.new(color.red, 10), style=label.style_label_down, size=size.small)
+
+plotshape(showOptionSignals and buyCall, "BUY C", style=shape.labelup, location=location.belowbar, color=color.green, text="C", textcolor=color.white, size=size.tiny)
+plotshape(showOptionSignals and buyPut, "BUY P", style=shape.labeldown, location=location.abovebar, color=color.red, text="P", textcolor=color.white, size=size.tiny)
+plotshape(potentialCall and not buyCall, "Potential C", style=shape.circle, location=location.belowbar, color=color.new(color.green, 35), size=size.tiny)
+plotshape(potentialPut and not buyPut, "Potential P", style=shape.circle, location=location.abovebar, color=color.new(color.red, 35), size=size.tiny)
+
+// ============================================================================
+// VISUAL — CONFIRMED TRADE SIGNALS
+// ============================================================================
+
+var label sigLabel = na
+var line lineEntry = na
+var line lineSL = na
+var line lineTP = na
+var label lblEntry = na
+var label lblSL = na
+var label lblTP = na
+
+if signalBUY or signalSELL
+    if not na(sigLabel)
+        label.delete(sigLabel)
+    if not na(lineEntry)
+        line.delete(lineEntry)
+    if not na(lineSL)
+        line.delete(lineSL)
+    if not na(lineTP)
+        line.delete(lineTP)
+    if not na(lblEntry)
+        label.delete(lblEntry)
+    if not na(lblSL)
+        label.delete(lblSL)
+    if not na(lblTP)
+        label.delete(lblTP)
+
+if signalBUY and showSignals
+    sigLabel := label.new(bar_index, low, "BUY", color=color.new(color.green, 0), textcolor=color.white, style=label.style_label_up, size=size.large)
+    lineEntry := line.new(bar_index - 5, sigEntry, bar_index + 15, sigEntry, color=color.white, width=3)
+    lineSL := line.new(bar_index - 5, sigSL, bar_index + 15, sigSL, color=color.red, width=2, style=line.style_dashed)
+    lineTP := line.new(bar_index - 5, sigTP, bar_index + 15, sigTP, color=color.green, width=2, style=line.style_dashed)
+    lblEntry := label.new(bar_index + 16, sigEntry, " ENTRY " + str.tostring(sigEntry, format.mintick), color=color.new(color.black, 100), textcolor=color.white, style=label.style_label_left, size=size.normal)
+    lblSL := label.new(bar_index + 16, sigSL, " SL " + str.tostring(sigSL, format.mintick), color=color.new(color.black, 100), textcolor=color.red, style=label.style_label_left, size=size.normal)
+    lblTP := label.new(bar_index + 16, sigTP, " TP " + str.tostring(sigTP, format.mintick), color=color.new(color.black, 100), textcolor=color.green, style=label.style_label_left, size=size.normal)
+
+if signalSELL and showSignals
+    sigLabel := label.new(bar_index, high, "SELL", color=color.new(color.red, 0), textcolor=color.white, style=label.style_label_down, size=size.large)
+    lineEntry := line.new(bar_index - 5, sigEntry, bar_index + 15, sigEntry, color=color.white, width=3)
+    lineSL := line.new(bar_index - 5, sigSL, bar_index + 15, sigSL, color=color.red, width=2, style=line.style_dashed)
+    lineTP := line.new(bar_index - 5, sigTP, bar_index + 15, sigTP, color=color.green, width=2, style=line.style_dashed)
+    lblEntry := label.new(bar_index + 16, sigEntry, " ENTRY " + str.tostring(sigEntry, format.mintick), color=color.new(color.black, 100), textcolor=color.white, style=label.style_label_left, size=size.normal)
+    lblSL := label.new(bar_index + 16, sigSL, " SL " + str.tostring(sigSL, format.mintick), color=color.new(color.black, 100), textcolor=color.red, style=label.style_label_left, size=size.normal)
+    lblTP := label.new(bar_index + 16, sigTP, " TP " + str.tostring(sigTP, format.mintick), color=color.new(color.black, 100), textcolor=color.green, style=label.style_label_left, size=size.normal)
+
+// ============================================================================
+// VISUAL â€” VOLUME BAR HIGHLIGHT
+// ============================================================================
+
+barcolor(highVol ? (close > open ? color.new(color.green, 70) : color.new(color.red, 70)) : na)
+// Hidden chart plots remain available in TradingView's Data Window when you
+// hover any candle, so volume is read from that candle instead of staying on
+// the last-bar panel value.
+plot(volume, "Candle Volume (hover)", display=display.data_window)
+plot(volSMA, "Average Volume (hover)", display=display.data_window)
+
+// ============================================================================
+// INFO PANEL
+// ============================================================================
+
+var table panel = table.new(position.top_center, 2, 6, bgcolor=color.new(color.black, 15), border_width=1, border_color=color.new(color.gray, 50), frame_width=1, frame_color=color.new(color.gray, 50))
+
+if showPanel and barstate.islast
+    table.cell(panel, 0, 0, "TREND", text_color=color.white, text_size=size.small, text_halign=text.align_left)
+    table.cell(panel, 1, 0, trendStr, text_color=trendCol, text_size=size.small, text_halign=text.align_right)
+    table.cell(panel, 0, 1, "TREND STRENGTH (ADX)", text_color=color.white, text_size=size.small, text_halign=text.align_left)
+    table.cell(panel, 1, 1, str.tostring(adxVal, "#.##"), text_color=adxVal > adxThresh ? color.green : color.gray, text_size=size.small, text_halign=text.align_right)
+    string liveVolume = na(volume) ? "N/A" : str.tostring(volume, format.volume)
+    string averageVolume = na(volSMA) ? "N/A" : str.tostring(volSMA, format.volume)
+    table.cell(panel, 0, 2, "LIVE VOLUME", text_color=color.white, text_size=size.small, text_halign=text.align_left)
+    table.cell(panel, 1, 2, liveVolume + " / AVG " + averageVolume, text_color=highVol ? color.orange : color.gray, text_size=size.small, text_halign=text.align_right)
+    table.cell(panel, 0, 3, "BIAS", text_color=color.white, text_size=size.small, text_halign=text.align_left)
+    string bias5m = emaF > emaS ? "BULL" : emaF < emaS ? "BEAR" : "FLAT"
+    table.cell(panel, 1, 3, bias5m, text_color=emaF > emaS ? color.green : emaF < emaS ? color.red : color.gray, text_size=size.small, text_halign=text.align_right)
+    table.cell(panel, 0, 4, "SIGNAL", text_color=color.white, text_size=size.small, text_halign=text.align_left)
+    string sigStat = signalBUY ? "BUY" : signalSELL ? "SELL" : "WAIT"
+    color sigCol = signalBUY ? color.green : signalSELL ? color.red : color.gray
+    table.cell(panel, 1, 4, sigStat, text_color=sigCol, text_size=size.small, text_halign=text.align_right)
+    table.cell(panel, 0, 5, "LIVE PRICE", text_color=color.white, text_size=size.small, text_halign=text.align_left)
+    table.cell(panel, 1, 5, str.tostring(close, format.mintick), text_color=color.white, text_size=size.small, text_halign=text.align_right)
+
+// ============================================================================
+// ALERTS
+// ============================================================================
+
+alertcondition(signalBUY, title="BUY", message="IdxPro BUY confirmed on {{ticker}} at {{close}}")
+alertcondition(signalSELL, title="SELL", message="IdxPro SELL confirmed on {{ticker}} at {{close}}")
+alertcondition(strongBull, title="Buyers Active", message="Aggressive buyers on {{ticker}} at {{close}}")
+alertcondition(strongBear, title="Sellers Active", message="Aggressive sellers on {{ticker}} at {{close}}")
+alertcondition(buyCall, title="BUY C Confirmed", message="BUY C confirmed: bullish break above R on {{ticker}} at {{close}}")
+alertcondition(buyPut, title="BUY P Confirmed", message="BUY P confirmed: bearish break below S on {{ticker}} at {{close}}")
