@@ -14,11 +14,30 @@
 
 > **Direction → Location → Retest → Confirmation → Entry → Protect → Target**
 
-Index Pro v3 Stable is a single-overlay TradingView indicator designed to turn a disciplined scalping process into visible, repeatable chart rules. It combines higher-timeframe bias, POC location, previous-day body levels, price-action confirmation, and defined trade levels without treating every candle as a signal.
+IndexPro v1 is a single-overlay TradingView indicator designed to turn a disciplined scalping process into visible, repeatable chart rules. It combines 5M EMA trend, POC location, previous-day body levels, genuine FVGs, price-action confirmation, and defined trade levels without treating every candle as a signal.
 
 <div align="center">
 
 **[Open the animated trading dashboard](index.html)**
+
+</div>
+
+<table>
+<tr>
+<td width="25%" align="center"><b>5M TREND</b><br/><code>BULLISH / BEARISH</code><br/>EMA price bias</td>
+<td width="25%" align="center"><b>CONFIRMATION</b><br/><code>BREAK + SUSTAIN</code><br/>Closed candles only</td>
+<td width="25%" align="center"><b>FVG FILTER</b><br/><code>REAL 3-CANDLE GAP</code><br/>Drawn when formed</td>
+<td width="25%" align="center"><b>RISK MAP</b><br/><code>ENTRY / SL / TP</code><br/>Color-coded boxes</td>
+</tr>
+</table>
+
+<div align="center">
+
+<img src="index-pro-banner.svg" alt="Animated candlestick and trend graph" width="92%" />
+
+<br/>
+<strong>LIVE FLOW</strong><br/>
+<code>5M EMA → BREAK → SUSTAIN → BUY / SELL BOX</code>
 
 </div>
 
