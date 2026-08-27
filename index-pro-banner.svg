@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" role="img" aria-labelledby="title desc">
+  <title id="title">Index Pro v3 Stable</title>
+  <desc id="desc">Animated dark trading dashboard banner with candles, volume bars, and a moving trend line.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#07111f"/><stop offset="0.55" stop-color="#102a43"/><stop offset="1" stop-color="#063b4c"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" x2="1"><stop stop-color="#22d3ee" stop-opacity="0"/><stop offset="0.5" stop-color="#22d3ee" stop-opacity=".8"/><stop offset="1" stop-color="#22d3ee" stop-opacity="0"/></linearGradient>
+    <filter id="soft"><feGaussianBlur stdDeviation="5"/></filter>
+    <style>
+      .grid{stroke:#93c5fd;stroke-opacity:.1}.bull{stroke:#34d399;fill:#34d399}.bear{stroke:#fb7185;fill:#fb7185}
+      .pulse{animation:pulse 3s ease-in-out infinite}.drift{animation:drift 5s ease-in-out infinite alternate}
+      @keyframes pulse{0%,100%{opacity:.25}50%{opacity:.85}} @keyframes drift{from{transform:translateX(-16px)}to{transform:translateX(16px)}}
+    </style>
+  </defs>
+  <rect width="1200" height="300" rx="24" fill="url(#bg)"/>
+  <g class="grid"><path d="M40 55H1160M40 105H1160M40 155H1160M40 205H1160M40 255H1160"/><path d="M100 35V270M220 35V270M340 35V270M460 35V270M580 35V270M700 35V270M820 35V270M940 35V270M1060 35V270"/></g>
+  <path class="pulse" d="M40 195 C170 175 210 210 330 150 S520 180 640 115 S820 135 930 82 S1080 110 1160 55" fill="none" stroke="#22d3ee" stroke-width="4"/>
+  <path class="drift" d="M40 230H1160" stroke="url(#glow)" stroke-width="8" filter="url(#soft)"/>
+  <g stroke-width="4">
+    <path class="bull" d="M130 190V120M130 145h40v45h-40z"/><path class="bear" d="M230 155V85M230 105h40v50h-40z"/>
+    <path class="bull" d="M330 175V105M330 120h40v55h-40z"/><path class="bull" d="M430 150V70M430 90h40v60h-40z"/>
+    <path class="bear" d="M530 130V55M530 72h40v58h-40z"/><path class="bull" d="M630 115V35M630 58h40v57h-40z"/>
+    <path class="bull" d="M730 135V60M730 78h40v57h-40z"/><path class="bear" d="M830 108V30M830 48h40v60h-40z"/>
+    <path class="bull" d="M930 92V20M930 42h40v50h-40z"/><path class="bull" d="M1030 70V15M1030 28h40v42h-40z"/>
+  </g>
+  <g opacity=".25" fill="#fbbf24"><rect x="110" y="245" width="34" height="25"/><rect x="210" y="235" width="34" height="35"/><rect x="310" y="250" width="34" height="20"/><rect x="410" y="225" width="34" height="45"/><rect x="510" y="240" width="34" height="30"/><rect x="610" y="215" width="34" height="55"/><rect x="710" y="245" width="34" height="25"/><rect x="810" y="230" width="34" height="40"/><rect x="910" y="210" width="34" height="60"/><rect x="1010" y="220" width="34" height="50"/></g>
+  <text x="60" y="78" fill="#e0f2fe" font-family="Arial,sans-serif" font-size="32" font-weight="700">INDEX PRO</text>
+  <text x="62" y="108" fill="#67e8f9" font-family="Arial,sans-serif" font-size="15" letter-spacing="3">V3 STABLE  •  TRADINGVIEW PINE SCRIPT V6</text>
+  <g font-family="Arial,sans-serif" font-size="13" font-weight="700"><rect x="62" y="232" width="120" height="28" rx="14" fill="#064e3b"/><text x="82" y="251" fill="#6ee7b7">TREND + ZONES</text><rect x="194" y="232" width="110" height="28" rx="14" fill="#164e63"/><text x="215" y="251" fill="#a5f3fc">POC + FVG</text></g>
+</svg>

@@ -1,45 +1,106 @@
-# Index Pro v3 Stable - Specification
+<div align="center">
 
-## 1. Overview
-Index Pro v3 Stable is a comprehensive TradingView Pine Script v6 indicator tailored for index trading (specifically Indian markets: NIFTY, BANKNIFTY, SENSEX, running 09:15 - 15:30 Asia/Kolkata). It combines trend analysis, volume profiling, price action concepts (FVG, Pivots), and a rules-based entry model into a single overlay.
+<img src="index-pro-banner.svg" alt="Animated Index Pro trading banner" width="100%" />
 
-## 2. Core Components
+# Index Pro v3 Stable
 
-### 2.1 Trend Bias (HTF ADX + EMA)
-- **Fast/Slow EMA:** `emaFast` (default 9), `emaSlow` (default 21).
-- **Directional Bias:** Derived from a Higher Timeframe (default 5-minute) using manual ADX calculation.
-- **Rules:**
-  - Bullish: `emaF > emaS` AND `+DI > -DI` AND `ADX > adxThresh`
-  - Bearish: `emaF < emaS` AND `-DI > +DI` AND `ADX > adxThresh`
+### A rules-based intraday indicator for NIFTY, BANKNIFTY and SENSEX
 
-### 2.2 Volume & Session Profiling
-- Tracks the trading session internally based on timezone.
-- **Volume Profile:** Manually calculates POC (Point of Control), VAH (Value Area High), and VAL (Value Area Low) using a dynamic array of price bins.
-- **Volume Surges:** Highlights bars where `volume > SMA(volume, 20) * 1.5` as high volume.
+<img src="https://img.shields.io/badge/Pine%20Script-v6-2962FF?style=for-the-badge&logo=tradingview&logoColor=white" alt="Pine Script v6" />
+<img src="https://img.shields.io/badge/Market-Indian%20Indices-0F766E?style=for-the-badge" alt="Indian indices" />
+<img src="https://img.shields.io/badge/Session-09%3A15--15%3A30%20IST-F59E0B?style=for-the-badge" alt="India session" />
 
-### 2.3 Price Action Levels
-- **Support / Resistance (S/R):** Uses Pivot Highs/Lows (length 10). Consolidates close pivots (within 0.2 ATR) and counts hits to determine level strength.
-- **Fair Value Gaps (FVG):** Tracks up to N active FVGs. Bullish FVG occurs when current low > high[2]. Bearish FVG when current high < low[2].
-- **Key Strikes:** Draws psychological round numbers based on a strike step (e.g., every 50 or 100 points).
+</div>
 
-### 2.4 Trade Signal State Machine
-The core signal logic relies on price retesting the Volume Profile Value Area boundaries and confirming with a strong candle.
-- **LONG Flow:**
-  - **State 0 (Wait):** Trend is Bullish. Price enters VAL zone (within 1.5 ATR).
-  - **State 1 (Enter Zone):** Price pushes deep into the zone.
-  - **State 2 (Retest):** Price rebounds to the trigger zone.
-  - **State 3 (Confirm):** A strong bullish candle (close > open, body % > 55, closes above prev high) on sufficient volume triggers the `BUY` signal.
-- **SHORT Flow:** Mirrors LONG, using VAH as the resistance zone.
+> **Direction → Location → Retest → Confirmation → Entry → Protect → Target**
 
-## 3. UI and Visuals
-- Plots the 5M Trend EMA.
-- Draws FVG boxes, S/R lines, and Volume Profile dashed lines.
-- Adds text labels ("B" / "S") for strong conviction candles.
-- Displays a top-center dashboard summarizing Trend, ADX, Volume, Bias, and current Signal State.
-- Configures alerts for BUY/SELL signals and strong buyer/seller activity.
+Index Pro v3 Stable is a single-overlay TradingView indicator designed to turn a disciplined scalping process into visible, repeatable chart rules. It combines higher-timeframe bias, volume-profile location, price-action confirmation, and defined trade levels without treating every candle as a signal.
 
-## 4. Planned Architectural Improvements (v6 Agent Skills Refactor)
-- **UDT Encapsulation:** S/R levels, FVG zones, and Trade Signals will be wrapped in User-Defined Types (UDT).
-- **Modern Loops:** Replace `while` loops with `for...in`.
-- **Drawing Scaling:** Switch `xloc.bar_index` to `xloc.bar_time` to remove historical lookback drawing limits.
-- **Helper Methods:** Extract Volume Profile and Signal state logic into isolated methods.
+<div align="center">
+
+**[Open the animated trading dashboard](index.html)**
+
+</div>
+
+## What it reads
+
+| Module | What it shows | How it is used |
+|---|---|---|
+| **5M bias** | EMA 9/21, +DI, -DI and manual ADX | Defines bullish, bearish or ranging context |
+| **Session profile** | POC, VAH and VAL | Maps the main auction and reaction area |
+| **Price action** | FVGs, pivots and key strikes | Identifies possible locations, never automatic entries |
+| **Volume** | Current volume vs 20-bar average | Highlights unusually active candles |
+| **State machine** | WAIT → ZONE → REACTED → RETEST → SIGNAL | Prevents first-touch and chase entries |
+
+## Signal logic
+
+```mermaid
+flowchart LR
+    A[5M direction] --> B[High-interest zone]
+    B --> C[Price reaches zone]
+    C --> D[1M retest]
+    D --> E{Candle confirmation}
+    E -->|Bullish control| F[BUY candidate]
+    E -->|Bearish control| G[SELL candidate]
+    E -->|Missing / weak| H[NO TRADE]
+    F --> I[Entry + SL + TP]
+    G --> I
+```
+
+### Bullish setup
+
+1. 5M EMA/ADX context is bullish.
+2. Price reaches VAL, an FVG, POC, or another marked reaction zone.
+3. Price retests the area instead of being bought on first touch.
+4. A confirmed 1M bullish candle closes above the previous high with sufficient body and volume.
+5. The indicator displays entry, invalidation stop, and risk/reward target.
+
+### Bearish setup
+
+The bearish flow mirrors the bullish flow: bearish 5M context, VAH/resistance location, retest, confirmed sellers, then a defined stop and target.
+
+## Chart language
+
+- **POC — Point of Control:** price with the most profile volume; a balance reference, not an automatic entry.
+- **VAH — Value Area High:** upper edge of the main value area.
+- **VAL — Value Area Low:** lower edge of the main value area.
+- **FVG — Fair Value Gap:** inefficient fast-move area; a possible location, never a signal by itself.
+- **ADX — Average Directional Index:** trend-strength measure; it does not define direction alone.
+- **B / S circles:** high-volume candles with strong bullish or bearish bodies.
+
+## Recommended setup
+
+| Setting | Recommendation |
+|---|---|
+| Chart | 1-minute execution chart |
+| Bias timeframe | 5 minutes |
+| NIFTY strike interval | 50 |
+| BANKNIFTY / SENSEX interval | 100 |
+| Market session | 09:15–15:30, Asia/Kolkata |
+
+## Risk discipline
+
+- Define maximum session risk before trading.
+- Never widen the stop after entry.
+- Do not average down after invalidation.
+- Do not chase candles or trade in the middle of balance.
+- Backtest and paper trade before using live capital.
+
+## Alerts
+
+The indicator includes TradingView alerts for:
+
+- Confirmed BUY and SELL signals
+- Aggressive buyer and seller candles
+
+## Installation
+
+1. Open TradingView → **Pine Editor**.
+2. Open `toolv3_stable.pine`.
+3. Copy the complete script beginning with `//@version=6`.
+4. Paste it into Pine Editor and click **Add to chart**.
+5. Create alerts only after checking the selected symbol, timeframe and session.
+
+## Disclaimer
+
+Educational use only. This indicator does not guarantee profits or replace risk management. Validate every rule on historical data and paper trading before risking money.
