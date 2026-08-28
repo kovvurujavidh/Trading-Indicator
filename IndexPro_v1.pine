@@ -1,5 +1,5 @@
 //@version=6
-indicator("Index Pro v3 Stable", shorttitle="IdxStable", overlay=true, max_lines_count=100, max_labels_count=100, max_boxes_count=50)
+indicator("Index Pro v1 Stable", shorttitle="IdxStable", overlay=true, max_lines_count=100, max_labels_count=100, max_boxes_count=50)
 
 // ============================================================================
 // INPUTS
