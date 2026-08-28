@@ -276,56 +276,6 @@ if showSR and not showManualRS and array.size(srPrices) > 0
             array.push(srLblArr, lbl)
         _s += 1
 
-// Pivot table follows the same enable/disable rules as the pivot drawings.
-var table pivotTable = table.new(position.bottom_right, 2, 7, bgcolor=color.new(color.black, 15), border_width=1, border_color=color.new(color.gray, 50))
-if barstate.islast
-    float r1 = na
-    float r2 = na
-    float r3 = na
-    float s1 = na
-    float s2 = na
-    float s3 = na
-    if showSR and not showManualRS
-        int _pt = 0
-        while _pt < array.size(srPrices)
-            float _pp = array.get(srPrices, _pt)
-            if _pp > close
-                if na(r1) or _pp < r1
-                    r3 := r2
-                    r2 := r1
-                    r1 := _pp
-                else if na(r2) or _pp < r2
-                    r3 := r2
-                    r2 := _pp
-                else if na(r3) or _pp < r3
-                    r3 := _pp
-            else
-                if na(s1) or _pp > s1
-                    s3 := s2
-                    s2 := s1
-                    s1 := _pp
-                else if na(s2) or _pp > s2
-                    s3 := s2
-                    s2 := _pp
-                else if na(s3) or _pp > s3
-                    s3 := _pp
-            _pt += 1
-    bool pivotsOn = showSR and not showManualRS
-    table.cell(pivotTable, 0, 0, "PIVOTS", text_color=color.white, text_size=size.small, text_halign=text.align_left)
-    table.cell(pivotTable, 1, 0, pivotsOn ? "ON" : "OFF", text_color=pivotsOn ? color.green : color.gray, text_size=size.small, text_halign=text.align_right)
-    table.cell(pivotTable, 0, 1, "R1", text_color=color.red, text_size=size.small, text_halign=text.align_left)
-    table.cell(pivotTable, 1, 1, pivotsOn and not na(r1) ? str.tostring(r1, format.mintick) : "-", text_color=color.red, text_size=size.small, text_halign=text.align_right)
-    table.cell(pivotTable, 0, 2, "R2", text_color=color.red, text_size=size.small, text_halign=text.align_left)
-    table.cell(pivotTable, 1, 2, pivotsOn and not na(r2) ? str.tostring(r2, format.mintick) : "-", text_color=color.red, text_size=size.small, text_halign=text.align_right)
-    table.cell(pivotTable, 0, 3, "R3", text_color=color.red, text_size=size.small, text_halign=text.align_left)
-    table.cell(pivotTable, 1, 3, pivotsOn and not na(r3) ? str.tostring(r3, format.mintick) : "-", text_color=color.red, text_size=size.small, text_halign=text.align_right)
-    table.cell(pivotTable, 0, 4, "S1", text_color=color.lime, text_size=size.small, text_halign=text.align_left)
-    table.cell(pivotTable, 1, 4, pivotsOn and not na(s1) ? str.tostring(s1, format.mintick) : "-", text_color=color.lime, text_size=size.small, text_halign=text.align_right)
-    table.cell(pivotTable, 0, 5, "S2", text_color=color.lime, text_size=size.small, text_halign=text.align_left)
-    table.cell(pivotTable, 1, 5, pivotsOn and not na(s2) ? str.tostring(s2, format.mintick) : "-", text_color=color.lime, text_size=size.small, text_halign=text.align_right)
-    table.cell(pivotTable, 0, 6, "S3", text_color=color.lime, text_size=size.small, text_halign=text.align_left)
-    table.cell(pivotTable, 1, 6, pivotsOn and not na(s3) ? str.tostring(s3, format.mintick) : "-", text_color=color.lime, text_size=size.small, text_halign=text.align_right)
-
 // ============================================================================
 // KEY STRIKE LEVELS
 // ============================================================================
@@ -525,7 +475,7 @@ barcolor(highVol ? (close > open ? color.new(color.green, 70) : color.new(color.
 // INFO PANEL
 // ============================================================================
 
-var table panel = table.new(position.top_center, 2, 5, bgcolor=color.black, border_width=1, border_color=color.gray, frame_width=1, frame_color=color.gray)
+var table panel = table.new(position.top_right, 2, 5, bgcolor=color.black, border_width=1, border_color=color.gray, frame_width=1, frame_color=color.gray)
 
 if showPanel and barstate.islast
     table.cell(panel, 0, 0, "TREND", text_color=color.white, text_size=size.small, text_halign=text.align_left)
