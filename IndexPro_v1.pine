@@ -1,28 +1,22 @@
 //@version=6
-indicator("Index Pro v1 Stable", shorttitle="IdxStable", overlay=true, max_lines_count=100, max_labels_count=100, max_boxes_count=50)
+indicator("Javidh Pro v1 Stable", shorttitle="ProInd", overlay=true, max_lines_count=100, max_labels_count=100, max_boxes_count=50)
 
 // ============================================================================
 // INPUTS
 // ============================================================================
 
-grpSR = "â•â• Support & Resistance â•â•"
+grpSR = "Support & Resistance"
 srLen = input.int(10, "Pivot Length", minval=3, maxval=50, group=grpSR, display=display.none)
 showSR = input.bool(false, "Show Pivot R / S Levels", group=grpSR, tooltip="Disabled: primary R/S are Previous Day High/Low.", display=display.none)
 showManualRS = input.bool(false, "Enable Manual R / S", group=grpSR, tooltip="Enable the draggable manual Resistance and Support levels on the chart.")
 manualResistance = input.price(0.0, "Manual Resistance (R)", group=grpSR, active=showManualRS, display=display.none, tooltip="Enable Manual R / S, then set or drag the R level on the chart.")
 manualSupport = input.price(0.0, "Manual Support (S)", group=grpSR, active=showManualRS, display=display.none, tooltip="Enable Manual R / S, then set or drag the S level on the chart.")
 
-grpVP = "â•â• Volume Profile â•â•"
+grpVP = "Volume Profile"
 int profBins = 42
 bool showVP = true
 
-grpFVG = "â•â• Fair Value Gap â•â•"
-bool showFVG = true
-int maxFVG = 3
-// Show every genuine three-candle FVG; no size filter blocks valid gaps.
-float minFVGSize = 0.0
-
-grpT = "â•â• Trend â•â•"
+grpT = "Trend"
 int emaFast = 9
 int emaSlow = 21
 string biasTf = "5"
@@ -30,15 +24,15 @@ int adxLen = 14
 int adxThresh = 20
 bool showTrend = true
 
-grpV = "â•â• Volume â•â•"
+grpV = "Volume"
 int volLen = 20
 float volMult = 1.5
 
-grpK = "â•â• Key Levels â•â•"
+grpK = "Key Levels"
 int strikeStep = 50
 bool showKeys = true
 
-grpS = "â•â• Signals â•â•"
+grpS = "Signals"
 int atrLen = 14
 float atrBuf = 0.5
 float rrRatio = 2.0
@@ -46,15 +40,8 @@ float bodyPct = 55.0
 bool useVol = true
 bool showSignals = true
 
-grpD = "â•â• Display â•â•"
+grpD = "Display"
 bool showPanel = true
-
-type FvgZone
-    float top
-    float bottom
-    int direction
-    int bornBar
-    box zoneBox = na
 
 // ============================================================================
 // ATR
@@ -64,7 +51,7 @@ float atr = ta.atr(atrLen)
 float volSMA = ta.sma(volume, volLen)
 
 // ============================================================================
-// TREND (manual ADX â€” no ta.adx in v6)
+// TREND
 // ============================================================================
 
 f_trendMetrics() =>
@@ -84,10 +71,12 @@ f_trendMetrics() =>
     float htfDxRma = ta.rma(htfDx, adxLen)
     [htfEmaF, htfEmaS, htfPlusDI, htfMinusDI, htfDxRma]
 
-[emaF, emaS, plusDI, minusDI, adxVal] = request.security(syminfo.tickerid, biasTf, f_trendMetrics(), lookahead=barmerge.lookahead_off)
+[emaF, emaS, plusDI, minusDI, adxVal] = request.security(
+     syminfo.tickerid,
+     biasTf,
+     f_trendMetrics(),
+     lookahead=barmerge.lookahead_off)
 
-// Binary live trend display from the 5M fast EMA versus current price.
-// Per the requested rule: EMA below price = bearish; otherwise bullish.
 int trend = emaF < close ? -1 : 1
 color trendCol = trend == 1 ? color.green : color.red
 string trendStr = trend == 1 ? "BULLISH" : "BEARISH"
@@ -101,14 +90,14 @@ bool buyPressure = close > open and highVol
 bool sellPressure = close < open and highVol
 
 // ============================================================================
-// SESSION (Indian markets)
+// SESSION
 // ============================================================================
 
 bool inSess = not na(time(timeframe.period, "0915-1530", "Asia/Kolkata"))
 bool sessStart = inSess and not inSess[1]
 
 // ============================================================================
-// VOLUME PROFILE â€” POC
+// VOLUME PROFILE
 // ============================================================================
 
 var float[] vpBins = array.new_float(0)
@@ -118,78 +107,70 @@ var float poc = na
 
 if sessStart
     array.clear(vpBins)
+
     int _i = 0
+
     while _i < profBins
         array.push(vpBins, 0.0)
         _i += 1
+
     sessHi := high
     sessLo := low
 
 if inSess
+
     sessHi := math.max(nz(sessHi, high), high)
     sessLo := math.min(nz(sessLo, low), low)
+
     float rng = sessHi - sessLo
     float bsz = rng / profBins
+
     if bsz > 0 and array.size(vpBins) == profBins
+
         int bi = math.round((hlc3 - sessLo) / bsz)
+
         bi := math.max(0, math.min(profBins - 1, bi))
-        array.set(vpBins, bi, array.get(vpBins, bi) + volume)
+
+        array.set(
+             vpBins,
+             bi,
+             array.get(vpBins, bi) + volume)
+
         float mx = 0.0
         int pi = 0
         int _j = 0
+
         while _j < profBins
+
             if array.get(vpBins, _j) > mx
                 mx := array.get(vpBins, _j)
                 pi := _j
+
             _j += 1
+
         poc := sessLo + (pi + 0.5) * bsz
+
 // ============================================================================
 // PREVIOUS DAY HIGH / LOW
 // ============================================================================
 
-// Body-only previous-day levels: ignore the day's upper/lower wicks.
-float pdh = request.security(syminfo.tickerid, "D", math.max(open, close)[1], barmerge.gaps_off, barmerge.lookahead_off)
-float pdl = request.security(syminfo.tickerid, "D", math.min(open, close)[1], barmerge.gaps_off, barmerge.lookahead_off)
+// Body-only previous-day levels.
+float pdh = request.security(
+     syminfo.tickerid,
+     "D",
+     math.max(open, close)[1],
+     barmerge.gaps_off,
+     barmerge.lookahead_off)
+
+float pdl = request.security(
+     syminfo.tickerid,
+     "D",
+     math.min(open, close)[1],
+     barmerge.gaps_off,
+     barmerge.lookahead_off)
 
 // ============================================================================
-// FAIR VALUE GAP
-// ============================================================================
-
-var array<FvgZone> fvgZones = array.new<FvgZone>()
-
-if barstate.isconfirmed
-    int idx = 0
-    int sz = array.size(fvgZones)
-    while idx < sz
-        bool rem = false
-        FvgZone zone = array.get(fvgZones, idx)
-        if zone.direction == 1 and close < zone.bottom
-            rem := true
-        if zone.direction == -1 and close > zone.top
-            rem := true
-        if bar_index - zone.bornBar > 100
-            rem := true
-        if rem
-            if not na(zone.zoneBox)
-                box.delete(zone.zoneBox)
-            array.remove(fvgZones, idx)
-            sz -= 1
-        else
-            if not na(zone.zoneBox)
-                box.set_right(zone.zoneBox, time + int(timeframe.in_seconds() * 1000 * 5))
-            idx += 1
-
-if barstate.isconfirmed and showFVG
-    int fvgRight = time + int(timeframe.in_seconds() * 1000 * 5)
-    if low > high[2] and low - high[2] > minFVGSize and array.size(fvgZones) < maxFVG
-        box bullBox = box.new(time[1], low, fvgRight, high[2], xloc=xloc.bar_time, bgcolor=color.new(color.green, 88), border_color=color.new(color.green, 70), border_width=1, text="FVG", text_color=color.green, text_size=size.small, text_halign=text.align_center, text_valign=text.align_center)
-        array.push(fvgZones, FvgZone.new(low, high[2], 1, bar_index, bullBox))
-    if high < low[2] and low[2] - high > minFVGSize and array.size(fvgZones) < maxFVG
-        box bearBox = box.new(time[1], low[2], fvgRight, high, xloc=xloc.bar_time, bgcolor=color.new(color.red, 88), border_color=color.new(color.red, 70), border_width=1, text="FVG", text_color=color.red, text_size=size.small, text_halign=text.align_center, text_valign=text.align_center)
-        array.push(fvgZones, FvgZone.new(low[2], high, -1, bar_index, bearBox))
-
-// ============================================================================
-// S/R â€” Named R1-R3, S1-S3
+// S/R
 // ============================================================================
 
 float pivotH = ta.pivothigh(high, srLen, srLen)
@@ -200,80 +181,165 @@ var array<string> srNames = array.new_string(0)
 var array<int> srHits = array.new_int(0)
 
 if not na(pivotH)
+
     float lvl = pivotH
     bool found = false
     int _i = 0
+
     while _i < array.size(srPrices)
+
         if math.abs(array.get(srPrices, _i) - lvl) < atr * 0.2
-            array.set(srHits, _i, array.get(srHits, _i) + 1)
+
+            array.set(
+                 srHits,
+                 _i,
+                 array.get(srHits, _i) + 1)
+
             found := true
             break
+
         _i += 1
+
     if not found
+
         array.push(srPrices, lvl)
         array.push(srNames, "")
         array.push(srHits, 1)
 
 if not na(pivotL)
+
     float lvl = pivotL
     bool found = false
     int _i = 0
+
     while _i < array.size(srPrices)
+
         if math.abs(array.get(srPrices, _i) - lvl) < atr * 0.2
-            array.set(srHits, _i, array.get(srHits, _i) + 1)
+
+            array.set(
+                 srHits,
+                 _i,
+                 array.get(srHits, _i) + 1)
+
             found := true
             break
+
         _i += 1
+
     if not found
+
         array.push(srPrices, lvl)
         array.push(srNames, "")
         array.push(srHits, 1)
 
 while array.size(srPrices) > 20
+
     array.remove(srPrices, 0)
     array.remove(srNames, 0)
     array.remove(srHits, 0)
 
-// Draw S/R â€” above = R, below = S
+// ============================================================================
+// DRAW S/R
+// ============================================================================
+
 var array<line> srLineArr = array.new_line(0)
 var array<label> srLblArr = array.new_label(0)
 
 int _cl = 0
+
 while _cl < array.size(srLineArr)
+
     line.delete(array.get(srLineArr, _cl))
     _cl += 1
+
 array.clear(srLineArr)
 
 int _cl2 = 0
+
 while _cl2 < array.size(srLblArr)
+
     label.delete(array.get(srLblArr, _cl2))
     _cl2 += 1
+
 array.clear(srLblArr)
 
 if showSR and not showManualRS and array.size(srPrices) > 0
+
     int rNum = 0
     int sNum = 0
-    // Draw from highest to lowest
     int _s = 0
+
     while _s < array.size(srPrices)
+
         float p = array.get(srPrices, _s)
         int h = array.get(srHits, _s)
+
         if p > close and rNum < 3
+
             rNum += 1
+
             string name = "R" + str.tostring(rNum) + " / Pivot Resistance"
-            color rCol = h >= 3 ? color.new(color.red, 30) : color.new(color.red, 60)
-            line ln = line.new(bar_index - 60, p, bar_index + 10, p, color=rCol, width=h >= 3 ? 3 : 2, style=line.style_solid)
+
+            color rCol =
+                 h >= 3 ?
+                 color.new(color.red, 30) :
+                 color.new(color.red, 60)
+
+            line ln = line.new(
+                 bar_index - 60,
+                 p,
+                 bar_index + 10,
+                 p,
+                 color=rCol,
+                 width=h >= 3 ? 3 : 2,
+                 style=line.style_solid)
+
             array.push(srLineArr, ln)
-            label lbl = label.new(bar_index + 11, p, " " + name + " " + str.tostring(p, format.mintick), color=color.new(color.black, 100), textcolor=rCol, style=label.style_label_left, size=size.normal)
+
+            label lbl = label.new(
+                 bar_index + 11,
+                 p,
+                 " " + name + " " + str.tostring(p, format.mintick),
+                 color=color.new(color.black, 100),
+                 textcolor=rCol,
+                 style=label.style_label_left,
+                 size=size.normal)
+
             array.push(srLblArr, lbl)
+
         else if p <= close and sNum < 3
+
             sNum += 1
+
             string name = "S" + str.tostring(sNum) + " / Pivot Support"
-            color sCol = h >= 3 ? color.new(color.green, 30) : color.new(color.green, 60)
-            line ln = line.new(bar_index - 60, p, bar_index + 10, p, color=sCol, width=h >= 3 ? 3 : 2, style=line.style_solid)
+
+            color sCol =
+                 h >= 3 ?
+                 color.new(color.green, 30) :
+                 color.new(color.green, 60)
+
+            line ln = line.new(
+                 bar_index - 60,
+                 p,
+                 bar_index + 10,
+                 p,
+                 color=sCol,
+                 width=h >= 3 ? 3 : 2,
+                 style=line.style_solid)
+
             array.push(srLineArr, ln)
-            label lbl = label.new(bar_index + 11, p, " " + name + " " + str.tostring(p, format.mintick), color=color.new(color.black, 100), textcolor=sCol, style=label.style_label_left, size=size.normal)
+
+            label lbl = label.new(
+                 bar_index + 11,
+                 p,
+                 " " + name + " " + str.tostring(p, format.mintick),
+                 color=color.new(color.black, 100),
+                 textcolor=sCol,
+                 style=label.style_label_left,
+                 size=size.normal)
+
             array.push(srLblArr, lbl)
+
         _s += 1
 
 // ============================================================================
@@ -284,33 +350,66 @@ var array<line> keyLineArr = array.new_line(0)
 var array<label> keyLblArr = array.new_label(0)
 
 int _kl = 0
+
 while _kl < array.size(keyLineArr)
+
     line.delete(array.get(keyLineArr, _kl))
     _kl += 1
+
 array.clear(keyLineArr)
 
 int _kl2 = 0
+
 while _kl2 < array.size(keyLblArr)
+
     label.delete(array.get(keyLblArr, _kl2))
     _kl2 += 1
+
 array.clear(keyLblArr)
 
 if showKeys
+
     float base = math.floor(close / strikeStep) * strikeStep
-    float[] kLevels = array.from(base, base + strikeStep, base - strikeStep, base + strikeStep * 2, base - strikeStep * 2)
+
+    float[] kLevels = array.from(
+         base,
+         base + strikeStep,
+         base - strikeStep,
+         base + strikeStep * 2,
+         base - strikeStep * 2)
+
     int _k = 0
+
     while _k < array.size(kLevels)
+
         float kLvl = array.get(kLevels, _k)
-        line kLn = line.new(bar_index - 60, kLvl, bar_index + 10, kLvl, color=color.new(color.blue, 70), width=2, style=line.style_dotted)
+
+        line kLn = line.new(
+             bar_index - 60,
+             kLvl,
+             bar_index + 10,
+             kLvl,
+             color=color.new(color.blue, 70),
+             width=2,
+             style=line.style_dotted)
+
         array.push(keyLineArr, kLn)
-        label kLbl = label.new(bar_index + 11, kLvl, " KEY STRIKE " + str.tostring(kLvl, format.mintick), color=color.new(color.black, 100), textcolor=color.new(color.blue, 40), style=label.style_label_left, size=size.normal)
+
+        label kLbl = label.new(
+             bar_index + 11,
+             kLvl,
+             " KEY STRIKE " + str.tostring(kLvl, format.mintick),
+             color=color.new(color.black, 100),
+             textcolor=color.new(color.blue, 40),
+             style=label.style_label_left,
+             size=size.normal)
+
         array.push(keyLblArr, kLbl)
+
         _k += 1
 
-
-
 // ============================================================================
-// VISUAL â€” POC
+// VISUAL - POC
 // ============================================================================
 
 var line linePOC = na
@@ -318,11 +417,12 @@ var label lblPOC = na
 
 if not na(linePOC)
     line.delete(linePOC)
+
 if not na(lblPOC)
     label.delete(lblPOC)
 
 // ============================================================================
-// CONFIRMED SIGNALS — Previous-Day R/S Break, Retest + Confirmation
+// CONFIRMED SIGNALS
 // ============================================================================
 
 var int breakState = 0
@@ -330,46 +430,93 @@ var int breakBar = 0
 var float breakLevel = na
 var int breakDirection = 0
 
-float signalResistance = showManualRS and manualResistance > 0 ? manualResistance : pdh
-float signalSupport = showManualRS and manualSupport > 0 ? manualSupport : pdl
+float signalResistance =
+     showManualRS and manualResistance > 0 ?
+     manualResistance :
+     pdh
+
+float signalSupport =
+     showManualRS and manualSupport > 0 ?
+     manualSupport :
+     pdl
 
 bool signalBUY = false
 bool signalSELL = false
+
 float sigEntry = na
 float sigSL = na
 float sigTP = na
 
-// Confirmed setup: a break candle followed by a sustain candle.
-// BUY = close above PDH, then the next candle sustains above PDH.
-// SELL = close below PDL, then the next candle sustains below PDL.
-bool bullBreak = barstate.isconfirmed and inSess and trend == 1 and not na(signalResistance) and close > signalResistance and close[1] <= signalResistance
-bool bearBreak = barstate.isconfirmed and inSess and trend == -1 and not na(signalSupport) and close < signalSupport and close[1] >= signalSupport
+// Break candle
+bool bullBreak =
+     barstate.isconfirmed and
+     inSess and
+     trend == 1 and
+     not na(signalResistance) and
+     close > signalResistance and
+     close[1] <= signalResistance
+
+bool bearBreak =
+     barstate.isconfirmed and
+     inSess and
+     trend == -1 and
+     not na(signalSupport) and
+     close < signalSupport and
+     close[1] >= signalSupport
 
 if bullBreak
+
     breakState := 1
     breakBar := bar_index
     breakLevel := signalResistance
     breakDirection := 1
+
 if bearBreak
+
     breakState := 1
     breakBar := bar_index
     breakLevel := signalSupport
     breakDirection := -1
 
+// Sustain candle
 if barstate.isconfirmed and breakState == 1 and bar_index == breakBar + 1
+
     float candleRangeNow = high - low
     float bullBody = close - open
     float bearBody = open - close
-    bool bodyBullOK = candleRangeNow > 0 and close > open and (bullBody / candleRangeNow) * 100 >= bodyPct
-    bool bodyBearOK = candleRangeNow > 0 and close < open and (bearBody / candleRangeNow) * 100 >= bodyPct
-    bool volumeOK = not useVol or na(volSMA) or volume >= volSMA
 
-    if breakDirection == 1 and close > breakLevel and bodyBullOK and volumeOK and trend == 1
+    bool bodyBullOK =
+         candleRangeNow > 0 and
+         close > open and
+         (bullBody / candleRangeNow) * 100 >= bodyPct
+
+    bool bodyBearOK =
+         candleRangeNow > 0 and
+         close < open and
+         (bearBody / candleRangeNow) * 100 >= bodyPct
+
+    bool volumeOK =
+         not useVol or
+         na(volSMA) or
+         volume >= volSMA
+
+    if breakDirection == 1 and
+       close > breakLevel and
+       bodyBullOK and
+       volumeOK and
+       trend == 1
+
         signalBUY := true
         sigEntry := close
         sigSL := breakLevel - atrBuf * atr
         sigTP := close + (close - sigSL) * rrRatio
-    if breakDirection == -1 and close < breakLevel and bodyBearOK and volumeOK and trend == -1
+
+    if breakDirection == -1 and
+       close < breakLevel and
+       bodyBearOK and
+       volumeOK and
+       trend == -1
+
         signalSELL := true
         sigEntry := close
         sigSL := breakLevel + atrBuf * atr
@@ -378,61 +525,152 @@ if barstate.isconfirmed and breakState == 1 and bar_index == breakBar + 1
     breakState := 0
     breakDirection := 0
 
-// Expire a setup if the sustain candle did not arrive immediately.
+// Expire setup
 if breakState == 1 and bar_index > breakBar + 1
+
     breakState := 0
     breakDirection := 0
 
+// ============================================================================
+// POC
+// ============================================================================
+
 if showVP and not na(poc)
-    linePOC := line.new(bar_index - 60, poc, bar_index + 10, poc, color=color.new(color.yellow, 20), width=3, style=line.style_solid)
-    lblPOC := label.new(bar_index + 11, poc, " POC / Main Volume Price " + str.tostring(poc, format.mintick), color=color.new(color.yellow, 80), textcolor=color.yellow, style=label.style_label_left, size=size.normal)
+
+    linePOC := line.new(
+         bar_index - 60,
+         poc,
+         bar_index + 10,
+         poc,
+         color=color.new(color.yellow, 20),
+         width=3,
+         style=line.style_solid)
+
+    lblPOC := label.new(
+         bar_index + 11,
+         poc,
+         " POC / Main Volume Price " + str.tostring(poc, format.mintick),
+         color=color.new(color.yellow, 80),
+         textcolor=color.yellow,
+         style=label.style_label_left,
+         size=size.normal)
 
 // ============================================================================
-// VISUAL â€” LIGHTWEIGHT TREND
+// LIGHTWEIGHT TREND
 // ============================================================================
 
-plot(showTrend ? emaF : na, "5M Trend EMA", color=trendCol, linewidth=2)
+plot(
+     showTrend ? emaF : na,
+     "5M Trend EMA",
+     color=trendCol,
+     linewidth=2)
+
 var line rLine = na
 var line sLine = na
+
 if barstate.islast and not na(pdh) and not na(pdl)
-    int rsLineTime = time + int(nz(timeframe.in_seconds(), 60) * 1000)
+
+    int rsLineTime =
+         time +
+         int(nz(timeframe.in_seconds(), 60) * 1000)
+
     if na(rLine)
-        rLine := line.new(time, pdh, rsLineTime, pdh, xloc=xloc.bar_time, extend=extend.right, color=color.green, width=2)
-        sLine := line.new(time, pdl, rsLineTime, pdl, xloc=xloc.bar_time, extend=extend.right, color=color.red, width=2)
+
+        rLine := line.new(
+             time,
+             pdh,
+             rsLineTime,
+             pdh,
+             xloc=xloc.bar_time,
+             extend=extend.right,
+             color=color.green,
+             width=2)
+
+        sLine := line.new(
+             time,
+             pdl,
+             rsLineTime,
+             pdl,
+             xloc=xloc.bar_time,
+             extend=extend.right,
+             color=color.red,
+             width=2)
+
     else
+
         line.set_xy1(rLine, time, pdh)
         line.set_xy2(rLine, rsLineTime, pdh)
+
         line.set_xy1(sLine, time, pdl)
         line.set_xy2(sLine, rsLineTime, pdl)
+
 var line manualRLine = na
 var line manualSLine = na
+
 if barstate.islast
+
     if showManualRS and manualResistance > 0
+
         if na(manualRLine)
-            manualRLine := line.new(bar_index, manualResistance, bar_index + 1, manualResistance, extend=extend.right, color=color.red, width=2)
+
+            manualRLine := line.new(
+                 bar_index,
+                 manualResistance,
+                 bar_index + 1,
+                 manualResistance,
+                 extend=extend.right,
+                 color=color.red,
+                 width=2)
+
         else
-            line.set_xy1(manualRLine, bar_index, manualResistance)
-            line.set_xy2(manualRLine, bar_index + 1, manualResistance)
+
+            line.set_xy1(
+                 manualRLine,
+                 bar_index,
+                 manualResistance)
+
+            line.set_xy2(
+                 manualRLine,
+                 bar_index + 1,
+                 manualResistance)
+
     else if not na(manualRLine)
+
         line.delete(manualRLine)
         manualRLine := na
+
     if showManualRS and manualSupport > 0
+
         if na(manualSLine)
-            manualSLine := line.new(bar_index, manualSupport, bar_index + 1, manualSupport, extend=extend.right, color=color.lime, width=2)
+
+            manualSLine := line.new(
+                 bar_index,
+                 manualSupport,
+                 bar_index + 1,
+                 manualSupport,
+                 extend=extend.right,
+                 color=color.lime,
+                 width=2)
+
         else
-            line.set_xy1(manualSLine, bar_index, manualSupport)
-            line.set_xy2(manualSLine, bar_index + 1, manualSupport)
+
+            line.set_xy1(
+                 manualSLine,
+                 bar_index,
+                 manualSupport)
+
+            line.set_xy2(
+                 manualSLine,
+                 bar_index + 1,
+                 manualSupport)
+
     else if not na(manualSLine)
+
         line.delete(manualSLine)
         manualSLine := na
 
 // ============================================================================
-// VISUAL â€” BUYER / SELLER CIRCLES
-// ============================================================================
-
-
-// ============================================================================
-// VISUAL — CONFIRMED SIGNALS
+// CONFIRMED SIGNAL VISUALS
 // ============================================================================
 
 var line lineEntry = na
@@ -440,62 +678,284 @@ var line lineSL = na
 var line lineTP = na
 
 if signalBUY and showSignals
-    lineEntry := line.new(bar_index - 5, sigEntry, bar_index + 15, sigEntry, color=color.white, width=3)
-    lineSL := line.new(bar_index - 5, sigSL, bar_index + 15, sigSL, color=color.red, width=2, style=line.style_dashed)
-    lineTP := line.new(bar_index - 5, sigTP, bar_index + 15, sigTP, color=color.green, width=2, style=line.style_dashed)
+
+    lineEntry := line.new(
+         bar_index - 5,
+         sigEntry,
+         bar_index + 15,
+         sigEntry,
+         color=color.white,
+         width=3)
+
+    lineSL := line.new(
+         bar_index - 5,
+         sigSL,
+         bar_index + 15,
+         sigSL,
+         color=color.red,
+         width=2,
+         style=line.style_dashed)
+
+    lineTP := line.new(
+         bar_index - 5,
+         sigTP,
+         bar_index + 15,
+         sigTP,
+         color=color.green,
+         width=2,
+         style=line.style_dashed)
 
 if signalSELL and showSignals
-    lineEntry := line.new(bar_index - 5, sigEntry, bar_index + 15, sigEntry, color=color.white, width=3)
-    lineSL := line.new(bar_index - 5, sigSL, bar_index + 15, sigSL, color=color.red, width=2, style=line.style_dashed)
-    lineTP := line.new(bar_index - 5, sigTP, bar_index + 15, sigTP, color=color.green, width=2, style=line.style_dashed)
 
-// Keep confirmed signals on every historical candle. These markers are not
-// deleted by later signals, so at least two days of loaded data remain visible.
-plotshape(showSignals and signalBUY, title="BUY", style=shape.labelup, location=location.belowbar, color=color.green, text="BUY", textcolor=color.white, size=size.small)
-plotshape(showSignals and signalSELL, title="SELL", style=shape.labeldown, location=location.abovebar, color=color.red, text="SELL", textcolor=color.white, size=size.small)
+    lineEntry := line.new(
+         bar_index - 5,
+         sigEntry,
+         bar_index + 15,
+         sigEntry,
+         color=color.white,
+         width=3)
+
+    lineSL := line.new(
+         bar_index - 5,
+         sigSL,
+         bar_index + 15,
+         sigSL,
+         color=color.red,
+         width=2,
+         style=line.style_dashed)
+
+    lineTP := line.new(
+         bar_index - 5,
+         sigTP,
+         bar_index + 15,
+         sigTP,
+         color=color.green,
+         width=2,
+         style=line.style_dashed)
 
 // ============================================================================
-// VISUAL â€” VOLUME BAR HIGHLIGHT
+// BUY / SELL
 // ============================================================================
 
-// Persistent confirmation boxes: one box per confirmed BUY/SELL setup.
-var array<box> signalBoxes = array.new_box()
+plotshape(
+     showSignals and signalBUY,
+     title="BUY",
+     style=shape.labelup,
+     location=location.belowbar,
+     color=color.green,
+     text="BUY",
+     textcolor=color.white,
+     size=size.small)
+
+plotshape(
+     showSignals and signalSELL,
+     title="SELL",
+     style=shape.labeldown,
+     location=location.abovebar,
+     color=color.red,
+     text="SELL",
+     textcolor=color.white,
+     size=size.small)
+
+// ============================================================================
+// SIGNAL BOXES
+// ============================================================================
+
+var array<box> signalBoxes = array.new_box(0)
+
 if showSignals and (signalBUY or signalSELL)
-    color boxColor = signalBUY ? color.green : color.red
-    string boxText = signalBUY ? "BUY" : "SELL"
-    float boxTop = signalBUY ? low - atr * 0.45 : high + atr * 1.45
-    float boxBottom = signalBUY ? low - atr * 1.25 : high + atr * 0.65
-    box signalBox = box.new(left=bar_index + 1, top=boxTop, right=bar_index + 5, bottom=boxBottom, bgcolor=color.new(boxColor, 78), border_color=boxColor, border_width=2, text=boxText, text_color=color.white, text_size=size.small, text_halign=text.align_center, text_valign=text.align_center)
+
+    color signalBoxColor =
+         signalBUY ?
+         color.green :
+         color.red
+
+    string signalBoxText =
+         signalBUY ?
+         "BUY" :
+         "SELL"
+
+    float boxTop =
+         signalBUY ?
+         low - atr * 0.45 :
+         high + atr * 1.45
+
+    float boxBottom =
+         signalBUY ?
+         low - atr * 1.25 :
+         high + atr * 0.65
+
+    box signalBox = box.new(
+         left=bar_index + 1,
+         top=boxTop,
+         right=bar_index + 5,
+         bottom=boxBottom,
+         bgcolor=color.new(signalBoxColor, 78),
+         border_color=signalBoxColor,
+         border_width=2,
+         text=signalBoxText,
+         text_color=color.white,
+         text_size=size.small,
+         text_halign=text.align_center,
+         text_valign=text.align_center)
+
     array.push(signalBoxes, signalBox)
+
     while array.size(signalBoxes) > 40
+
         box.delete(array.shift(signalBoxes))
 
-barcolor(highVol ? (close > open ? color.new(color.green, 70) : color.new(color.red, 70)) : na)
+barcolor(
+     highVol ?
+     (close > open ? color.new(color.green, 70) : color.new(color.red, 70)) :
+     na)
+
 // ============================================================================
 // INFO PANEL
 // ============================================================================
 
-var table panel = table.new(position.top_right, 2, 5, bgcolor=color.black, border_width=1, border_color=color.gray, frame_width=1, frame_color=color.gray)
+var table panel = table.new(
+     position.top_right,
+     2,
+     5,
+     bgcolor=color.black,
+     border_width=1,
+     border_color=color.gray,
+     frame_width=1,
+     frame_color=color.gray)
+
+string liquidityText =
+     "PDH " +
+     str.tostring(pdh, format.mintick) +
+     " / PDL " +
+     str.tostring(pdl, format.mintick)
+
+string setupText =
+     signalBUY ?
+     "BUY" :
+     signalSELL ?
+     "SELL" :
+     "WAIT"
+
+color setupColor =
+     signalBUY ?
+     color.green :
+     signalSELL ?
+     color.red :
+     color.gray
 
 if showPanel and barstate.islast
-    table.cell(panel, 0, 0, "TREND", text_color=color.white, text_size=size.small, text_halign=text.align_left)
-    table.cell(panel, 1, 0, trendStr, text_color=trendCol, text_size=size.small, text_halign=text.align_right)
-    table.cell(panel, 0, 1, "TREND STRENGTH (ADX)", text_color=color.white, text_size=size.small, text_halign=text.align_left)
-    table.cell(panel, 1, 1, str.tostring(adxVal, "#.##"), text_color=adxVal > adxThresh ? color.green : color.gray, text_size=size.small, text_halign=text.align_right)
-    string liveVolume = na(volume) ? "N/A" : str.tostring(volume, format.volume)
-    string averageVolume = na(volSMA) ? "N/A" : str.tostring(volSMA, format.volume)
-    table.cell(panel, 0, 2, "LIVE VOLUME", text_color=color.white, text_size=size.small, text_halign=text.align_left)
-    table.cell(panel, 1, 2, liveVolume + " / AVG " + averageVolume, text_color=highVol ? color.orange : color.gray, text_size=size.small, text_halign=text.align_right)
-    table.cell(panel, 0, 3, "SIGNAL", text_color=color.white, text_size=size.small, text_halign=text.align_left)
-    string sigStat = signalBUY ? "BUY" : signalSELL ? "SELL" : "WAIT"
-    color sigCol = signalBUY ? color.green : signalSELL ? color.red : color.gray
-    table.cell(panel, 1, 3, sigStat, text_color=sigCol, text_size=size.small, text_halign=text.align_right)
-    table.cell(panel, 0, 4, "LIVE PRICE", text_color=color.white, text_size=size.small, text_halign=text.align_left)
-    table.cell(panel, 1, 4, str.tostring(close, format.mintick), text_color=color.white, text_size=size.small, text_halign=text.align_right)
+
+    table.cell(
+         panel,
+         0,
+         0,
+         "NIFTY 50",
+         text_color=color.white,
+         bgcolor=color.black,
+         text_size=size.small,
+         text_halign=text.align_left)
+
+    table.cell(
+         panel,
+         1,
+         0,
+         str.tostring(close, format.mintick),
+         text_color=color.white,
+         bgcolor=color.black,
+         text_size=size.small,
+         text_halign=text.align_right)
+
+    table.cell(
+         panel,
+         0,
+         1,
+         "15M TREND",
+         text_color=color.white,
+         bgcolor=color.black,
+         text_size=size.small,
+         text_halign=text.align_left)
+
+    table.cell(
+         panel,
+         1,
+         1,
+         trendStr,
+         text_color=trendCol,
+         bgcolor=color.black,
+         text_size=size.small,
+         text_halign=text.align_right)
+
+    table.cell(
+         panel,
+         0,
+         2,
+         "LIQUIDITY",
+         text_color=color.white,
+         bgcolor=color.black,
+         text_size=size.small,
+         text_halign=text.align_left)
+
+    table.cell(
+         panel,
+         1,
+         2,
+         liquidityText,
+         text_color=color.white,
+         bgcolor=color.black,
+         text_size=size.small,
+         text_halign=text.align_right)
+
+    table.cell(
+         panel,
+         0,
+         3,
+         "SETUP",
+         text_color=color.white,
+         bgcolor=color.black,
+         text_size=size.small,
+         text_halign=text.align_left)
+
+    table.cell(
+         panel,
+         1,
+         3,
+         setupText,
+         text_color=setupColor,
+         bgcolor=color.black,
+         text_size=size.small,
+         text_halign=text.align_right)
+
+    table.cell(
+         panel,
+         0,
+         4,
+         "TRADES",
+         text_color=color.white,
+         bgcolor=color.black,
+         text_size=size.small,
+         text_halign=text.align_left)
+
+    table.cell(
+         panel,
+         1,
+         4,
+         setupText,
+         text_color=setupColor,
+         bgcolor=color.black,
+         text_size=size.small,
+         text_halign=text.align_right)
 
 // ============================================================================
 // ALERTS
 // ============================================================================
 
-alertcondition(signalBUY, title="BUY", message="IdxPro BUY confirmed on {{ticker}} at {{close}}")
-alertcondition(signalSELL, title="SELL", message="IdxPro SELL confirmed on {{ticker}} at {{close}}")
+alertcondition(
+     signalBUY,
+     title="BUY",
+     message="IdxPro BUY confirmed on {{ticker}} at {{close}}")
+
+alertcondition(
+     signalSELL,
+     title="SELL",
+     message="IdxPro SELL confirmed on {{ticker}} at {{close}}")
